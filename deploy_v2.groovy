@@ -16,7 +16,7 @@ pipeline {
         }
         stage('Notify') {
             steps {
-                slackSend(channel: '#deploy', message: 'Version 2 deployed successfully')
+                slackSend(channel: '#reports', message: 'Version 2 deployed successfully')
             }
         }
     }
