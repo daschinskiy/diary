@@ -19,8 +19,8 @@ pipeline {
             steps {
                 slackSend(channel: '#reports', message: 'Error detected. Rolling back...')
                 sh 'git checkout main'
-                sh 'docker-compose build'
-                sh 'docker-compose up -d'
+                sh 'docker compose build'
+                sh 'docker compose up -d'
                 slackSend(channel: '#reports', message: 'Rollback complete.')
             }
         }
