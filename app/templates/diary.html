@@ -1,0 +1,32 @@
+<html>
+<head>
+    <title>Diary</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="header">
+        <span>Привет, {{ username }}</span>
+        <a href="/logout">Выход</a>
+        <a href="/diary_v2">Совместимость</a>
+    </div>
+    <div class="container">
+        <h2>Записать в дневник</h2>
+        <form method="POST">
+            <input type="date" name="date" required><br>
+            <input type="text" name="topic" placeholder="Тема" required><br>
+            <textarea name="message" placeholder="Сообщение" required></textarea><br>
+            <button type="submit">Сохранить</button>
+        </form>
+        <h3>Ваши записи:</h3>
+        {% for post in posts %}
+            <div class="post">
+                <strong>{{ post[0] }} - {{ post[1] }}</strong>
+                <p>{{ post[2] }}</p>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="footer">
+        {{ current_date }} - Мой дневник
+    </div>
+</body>
+</html>
