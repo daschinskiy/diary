@@ -2,7 +2,9 @@ pipeline {
     agent any
     stages {
         stage('Clone repo') {
-            steps { git 'https://github.com/daschinskiy/diary.git' }
+            steps {
+                git branch: 'main', url: 'https://github.com/daschinskiy/diary.git'
+            }
         }
         stage('Build and Deploy') {
             steps {
@@ -12,7 +14,9 @@ pipeline {
             }
         }
         stage('Notify') {
-            steps { slackSend(channel: '#reports', message: 'Version 1 deployed') }
+            steps {
+                slackSend(channel: '#deploy', message: 'Version 1 deployed')
+            }
         }
     }
 }
