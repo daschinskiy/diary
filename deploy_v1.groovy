@@ -33,7 +33,7 @@ pipeline {
         }
         stage('Notify') {
             steps {
-                slackSend(channel: '#deploy', message: 'Version 1 deployed')
+                slackSend(channel: '#reports', message: 'Version 1 deployed')
             }
         }
     }
