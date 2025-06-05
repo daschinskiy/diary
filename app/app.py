@@ -8,7 +8,7 @@ app = Flask(__name__)
 app.secret_key = 'mysecret'
 
 DB_CONFIG = {
-    'host': os.environ.get('DB_HOST', 'localhost'),
+    'host': os.environ.get('DB_HOST', 'db'),
     'user': os.environ.get('DB_USER', 'root'),
     'password': os.environ.get('DB_PASSWORD', 'password'),
     'database': os.environ.get('DB_NAME', 'diary')
