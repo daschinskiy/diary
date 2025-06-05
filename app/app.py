@@ -7,7 +7,6 @@ import os
 app = Flask(__name__)
 app.secret_key = 'mysecret'
 
-# Используем переменные окружения для подключения к БД
 DB_CONFIG = {
     'host': os.environ.get('DB_HOST', 'localhost'),
     'user': os.environ.get('DB_USER', 'root'),
@@ -18,7 +17,6 @@ DB_CONFIG = {
 db = mysql.connector.connect(**DB_CONFIG)
 cursor = db.cursor()
 
-# Инициализация таблиц, если их нет
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,4 +91,4 @@ def diary_v2():
     return render_template('diary_v2.html', username=session['username'], rates=rates)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', port=5000)

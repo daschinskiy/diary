@@ -28,7 +28,7 @@ pipeline {
         stage('Build') {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    sh 'exit 1'
+                    sh 'exit 1'  // симулируем ошибку
                 }
             }
         }
@@ -36,6 +36,7 @@ pipeline {
             when { failed() }
             steps {
                 slackSend(channel: '#reports', message: 'Error detected. Rolling back...')
+                sh 'docker compose down || true'
                 sh 'git checkout main'
                 sh 'docker compose build'
                 sh 'docker compose up -d'

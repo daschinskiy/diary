@@ -4,12 +4,13 @@ pipeline {
         DB_NAME = 'diary'
     }
     stages {
-        stage('Checkout v2') {
+        stage('Checkout') {
             steps {
-                git 'https://github.com/daschinskiy/diary.git'
+                git url: 'https://github.com/daschinskiy/diary.git'
                 sh 'git checkout v2'
             }
         }
+
         stage('Create .env') {
             steps {
                 withCredentials([
@@ -25,6 +26,7 @@ pipeline {
                 }
             }
         }
+
         stage('Build and Deploy') {
             steps {
                 sh 'docker compose down || true'
@@ -32,9 +34,10 @@ pipeline {
                 sh 'docker compose up -d'
             }
         }
+
         stage('Notify') {
             steps {
-                slackSend(channel: '#reports', message: 'Version 2 deployed successfully')
+                slackSend(channel: '#reports', message: 'Version 2 deployed successfully!')
             }
         }
     }
