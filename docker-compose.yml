@@ -30,7 +30,7 @@ services:
 
   registry:
     image: registry:2
-    container_name: registry
+    container_name: registry_v1
     ports:
       - "5000:5000"
     restart: always
