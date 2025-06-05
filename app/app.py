@@ -91,4 +91,4 @@ def diary_v2():
     return render_template('diary_v2.html', username=session['username'], rates=rates)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
