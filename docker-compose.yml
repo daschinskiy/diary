@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    #container_name: diary-web
+    container_name: diary-web
     ports:
       - "5001:5000"
     env_file:
@@ -30,7 +30,7 @@ services:
 
   registry:
     image: registry:2
-    #container_name: registry 
+    container_name: registry
     ports:
       - "5000:5000"
     restart: always
