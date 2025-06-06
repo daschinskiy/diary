@@ -78,17 +78,5 @@ def diary():
     posts = cursor.fetchall()
     return render_template('diary.html', username=session['username'], posts=posts)
 
-@app.route('/diary_v2')
-def diary_v2():
-    if 'username' not in session:
-        return redirect('/')
-    url = 'https://api.nbrb.by/exrates/rates?periodicity=0'
-    try:
-        response = requests.get(url)
-        rates = response.json()
-    except:
-        rates = []
-    return render_template('diary_v2.html', username=session['username'], rates=rates)
-
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
