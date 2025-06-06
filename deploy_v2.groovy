@@ -7,7 +7,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 git url: 'https://github.com/daschinskiy/diary.git'
-                sh 'git checkout v2'
             }
         }
 
