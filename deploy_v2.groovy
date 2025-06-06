@@ -4,13 +4,11 @@ pipeline {
         DB_NAME = 'diary'
     }
     stages {
-        stage('Checkout') {
+        stage('Clone repo') {
             steps {
-                git url: 'https://github.com/daschinskiy/diary.git'
-                sh 'git checkout v2'
+                git branch: 'v2', url: 'https://github.com/daschinskiy/diary.git'
             }
         }
-
         stage('Create .env') {
             steps {
                 withCredentials([
@@ -26,7 +24,6 @@ pipeline {
                 }
             }
         }
-
         stage('Build and Deploy') {
             steps {
                 sh 'docker compose down || true'
