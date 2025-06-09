@@ -10,6 +10,7 @@ pipeline {
                 sh 'git checkout v2'
             }
         }
+
         stage('Create .env') {
             steps {
                 withCredentials([
@@ -25,23 +26,31 @@ pipeline {
                 }
             }
         }
+
         stage('Build') {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    sh 'exit 1'  // симулируем ошибку
+                    sh 'exit 1'  // Симулируем ошибку сборки
                 }
             }
         }
+
         stage('Rollback') {
             when { failed() }
             steps {
                 slackSend(channel: '#reports', message: 'Error detected. Rolling back...')
-                sh 'docker compose down || true'
-                sh 'git checkout main'
-                sh 'docker compose build'
-                sh 'docker compose up -d'
+                sh '''
+                    docker rm -f diary-web || true
+                    docker rm -f registry || true
+                    docker rm -f diary-db || true
+
+                    git checkout main
+                    docker compose build
+                    docker compose up -d --remove-orphans
+                '''
                 slackSend(channel: '#reports', message: 'Rollback complete.')
             }
         }
     }
 }
+

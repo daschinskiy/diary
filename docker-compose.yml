@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: diary-web-v2
+    container_name: diary-web
     ports:
       - "5001:5000"
     env_file:
@@ -16,6 +16,7 @@ services:
 
   db:
     image: mysql:5.7
+    container_name: diary-db
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -29,10 +30,11 @@ services:
 
   registry:
     image: registry:2
-    container_name: registry-v2
+    container_name: registry
     ports:
       - "5000:5000"
     restart: always
 
 volumes:
   db_data:
+
