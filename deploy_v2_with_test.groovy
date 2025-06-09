@@ -2,11 +2,12 @@ pipeline {
     agent any
     environment {
         DB_NAME = 'diary'
+        FORCE_FAILURE = 'true'
     }
     stages {
         stage('Prepare') {
             steps {
-                slackSend(channel: '#reports', message: 'Deploying version 2...')
+                slackSend(channel: '#reports', message: 'Starting deployment with forced failure test...')
                 git branch: 'v2', url: 'https://github.com/daschinskiy/diary.git'
             }
         }
@@ -49,11 +50,16 @@ pipeline {
                             docker rm diary-web-test || true
                             docker compose build web
                             
-                            echo "Running tests..."
+                            echo "Running simulated tests..."
+                            
+                            if [ "$FORCE_FAILURE" = "true" ]; then
+                                echo "SIMULATING TEST FAILURE!"
+                                exit 1
+                            fi
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
-                        error("Tests failed: ${e.getMessage()}")
+                        error("Simulated tests failed as expected: ${e.getMessage()}")
                     }
                 }
             }
@@ -69,22 +75,28 @@ pipeline {
                     docker rm diary-web || true
                     docker compose up -d --no-deps web
                 '''
-                slackSend(channel: '#reports', message: 'Version 2 deployed successfully!')
             }
         }
     }
     
     post {
         failure {
-            slackSend(channel: '#reports', message: "Deployment failed! Build: ${BUILD_URL}")
-            sh '''
-                if [ ! "$(docker ps -q -f name=diary-web)" ]; then
-                    docker compose up -d --no-deps web
-                fi
-            '''
+            script {
+                slackSend(channel: '#reports', message: "🚨 Deployment failed! Performing rollback to v1. Build: ${BUILD_URL}")
+                
+                sh '''
+                    git checkout main
+                    docker stop diary-web || true
+                    docker rm diary-web || true
+                    docker compose build web
+                    docker compose up -d web
+                '''
+                
+                slackSend(channel: '#reports', message: "✅ Rollback to v1 completed successfully")
+            }
         }
         success {
-            slackSend(channel: '#reports', message: "Version 2 deployed successfully! Build: ${BUILD_URL}")
+            slackSend(channel: '#reports', message: "✅ Version 2 deployed successfully! Build: ${BUILD_URL}")
         }
     }
 }
