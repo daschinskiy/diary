@@ -21,7 +21,7 @@ pipeline {
                         echo "DB_USER=$DB_USER" >> .env
                         echo "DB_PASSWORD=$DB_PASSWORD" >> .env
                         echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
-                        echo "DB_HOST=db" >> .env  # используем сервисное имя
+                        echo "DB_HOST=db" >> .env
                     '''
                 }
             }

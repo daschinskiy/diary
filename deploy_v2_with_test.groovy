@@ -2,17 +2,16 @@ pipeline {
     agent any
     environment {
         DB_NAME = 'diary'
-        FORCE_FAILURE = 'true'
     }
     stages {
-        stage('Prepare') {
+        stage('Clone v2') {
             steps {
-                slackSend(channel: '#reports', message: 'Starting deployment with rollback test...')
+                slackSend(channel: '#reports', message: 'Starting deployment test with forced DB error...')
                 git branch: 'v2', url: 'https://github.com/daschinskiy/diary.git'
             }
         }
 
-        stage('Create .env') {
+        stage('Setup Broken DB Config') {
             steps {
                 withCredentials([
                     usernamePassword(credentialsId: 'MYSQL_CREDS', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD'),
@@ -23,87 +22,78 @@ pipeline {
                         echo "DB_USER=$DB_USER" >> .env
                         echo "DB_PASSWORD=$DB_PASSWORD" >> .env
                         echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
-                        echo "DB_HOST=db" >> .env
+                        echo "DB_HOST=non_existent_db" >> .env
                     '''
                 }
             }
         }
 
-        stage('Build and Test') {
+        stage('Attempt Deploy v2') {
             steps {
                 script {
                     try {
                         sh '''
-                            echo "Building version 2..."
+                            docker stop diary-web || true
+                            docker rm diary-web || true
                             docker compose build web
+                            docker compose up -d web
                             
-                            if [ "$FORCE_FAILURE" = "true" ]; then
-                                echo "SIMULATING TEST FAILURE!"
+                            sleep 10
+                            
+                            if [ "$(docker inspect -f '{{.State.Status}}' diary-web)" != "running" ]; then
+                                echo "Container failed to start as expected"
                                 exit 1
                             fi
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
-                        error("Tests failed: ${e.getMessage()}")
+                        error("Deployment failed as expected: ${e.getMessage()}")
                     }
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Rollback to v1') {
             when {
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+                expression { currentBuild.result == 'FAILURE' }
             }
             steps {
-                sh '''
-                    echo "Deploying version 2..."
-                    docker compose up -d --no-deps web
-                '''
-            }
-        }
-    }
-    
-    post {
-        failure {
-            script {
-                slackSend(channel: '#reports', message: "🚨 Deployment failed! Performing rollback to v1...")
-                
-                sh '''
-                    docker stop diary-web diary-db registry || true
-                    docker rm diary-web diary-db registry || true
-                '''
-                
-                dir('rollback') {
-                    deleteDir()
-                    git branch: 'main', url: 'https://github.com/daschinskiy/diary.git'
+                script {
+                    slackSend(channel: '#reports', message: 'Starting rollback to v1...')
                     
-                    withCredentials([
-                        usernamePassword(credentialsId: 'MYSQL_CREDS', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD'),
-                        string(credentialsId: 'MYSQL_ROOT_PASS', variable: 'DB_ROOT_PASSWORD')
-                    ]) {
-                        sh '''
-                            echo "DB_NAME=$DB_NAME" > .env
-                            echo "DB_USER=$DB_USER" >> .env
-                            echo "DB_PASSWORD=$DB_PASSWORD" >> .env
-                            echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
-                            echo "DB_HOST=db" >> .env
-                        '''
+                    dir('rollback') {
+                        deleteDir()
+                        git branch: 'main', url: 'https://github.com/daschinskiy/diary.git'
+                        
+                        withCredentials([
+                            usernamePassword(credentialsId: 'MYSQL_CREDS', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD'),
+                            string(credentialsId: 'MYSQL_ROOT_PASS', variable: 'DB_ROOT_PASSWORD')
+                        ]) {
+                            sh '''
+                                echo "DB_NAME=$DB_NAME" > .env
+                                echo "DB_USER=$DB_USER" >> .env
+                                echo "DB_PASSWORD=$DB_PASSWORD" >> .env
+                                echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
+                                echo "DB_HOST=db" >> .env
+                                
+                                docker compose down || true
+                                docker compose up -d
+                                
+                                sleep 5
+                                docker ps -a | grep diary-web
+                                docker inspect -f '{{.State.Status}}' diary-web
+                            '''
+                        }
                     }
                     
-                    sh '''
-                        echo "Deploying version 1..."
-                        docker compose up -d
-                        
-                        sleep 10
-                        docker ps
-                        docker logs diary-web
-                    '''
+                    // Финальная проверка
+                    def webStatus = sh(script: 'docker inspect -f "{{.State.Status}}" diary-web', returnStdout: true).trim()
+                    def webPorts = sh(script: 'docker inspect -f "{{range \$p, \$conf := .NetworkSettings.Ports}}{{\$p}} {{end}}" diary-web', returnStdout: true).trim()
+                    
+                    slackSend(channel: '#reports', 
+                        message: "Rollback complete! Status: $webStatus, Ports: $webPorts | " +
+                                "View: http://your-server-ip:5001")
                 }
-                
-                def webStatus = sh(script: 'docker inspect -f "{{.State.Status}}" diary-web', returnStdout: true).trim()
-                def webPorts = sh(script: 'docker inspect -f "{{.NetworkSettings.Ports}}" diary-web', returnStdout: true).trim()
-                
-                slackSend(channel: '#reports', message: "Rollback result - Web status: $webStatus, Ports: $webPorts")
             }
         }
     }
