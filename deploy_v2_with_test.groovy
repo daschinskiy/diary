@@ -6,10 +6,11 @@ pipeline {
     stages {
         stage('Prepare') {
             steps {
-                slackSend(channel: '#reports', message: '🚀 Deploying version 2...')
+                slackSend(channel: '#reports', message: 'Deploying version 2...')
                 sh 'git checkout v2'
             }
         }
+
         stage('Create .env') {
             steps {
                 withCredentials([
@@ -25,38 +26,42 @@ pipeline {
                 }
             }
         }
-        stage('Test build') {
+
+        stage('Build and Test') {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    sh 'exit 1'  // Заменить на настоящие тесты позже
+                    sh '''
+                        docker stop diary-web || true
+                        docker rm diary-web || true
+                        docker compose build web
+                        # Здесь можно прописать реальные тесты
+                        echo "Run tests here"
+                        # Искусственная ошибка:
+                        exit 1
+                    '''
                 }
             }
         }
-        stage('Deploy') {
-            when { expression { currentBuild.currentResult == 'SUCCESS' } }
-            steps {
-                sh '''
-                    docker compose pull || true
-                    docker compose build web
-                    docker compose stop web registry
-                    docker compose rm -f web registry
-                    docker compose up -d web registry
-                '''
-                slackSend(channel: '#reports', message: '✅ Version 2 deployed successfully!')
-            }
-        }
+
         stage('Rollback') {
             when { failed() }
             steps {
-                slackSend(channel: '#reports', message: '❌ Build failed. Rolling back to main...')
+                slackSend(channel: '#reports', message: 'Error detected. Rolling back...')
                 sh '''
-                    docker compose stop web registry
-                    docker compose rm -f web registry
                     git checkout main
+                    docker stop diary-web || true
+                    docker rm diary-web || true
                     docker compose build web
-                    docker compose up -d web registry
+                    docker compose up -d web
                 '''
-                slackSend(channel: '#reports', message: '🔁 Rollback to main complete.')
+                slackSend(channel: '#reports', message: 'Rollback complete.')
+            }
+        }
+
+        stage('Notify') {
+            when { success() }
+            steps {
+                slackSend(channel: '#reports', message: 'Version 2 deployed successfully with tests!')
             }
         }
     }

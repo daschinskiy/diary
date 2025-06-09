@@ -10,31 +10,5 @@ services:
       - "5001:5000"
     env_file:
       - .env
-    depends_on:
-      - db
     restart: always
-
-  db:
-    image: mysql:5.7
-    container_name: diary-db
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "3307:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-    restart: always
-
-  registry:
-    image: registry:2
-    container_name: registry
-    ports:
-      - "5000:5000"
-    restart: always
-
-volumes:
-  db_data:
 
