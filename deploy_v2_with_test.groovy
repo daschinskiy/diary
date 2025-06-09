@@ -86,7 +86,6 @@ pipeline {
                         }
                     }
                     
-                    // Финальная проверка
                     def webStatus = sh(script: 'docker inspect -f "{{.State.Status}}" diary-web', returnStdout: true).trim()
                     def webPorts = sh(script: 'docker inspect -f "{{range \$p, \$conf := .NetworkSettings.Ports}}{{\$p}} {{end}}" diary-web', returnStdout: true).trim()
                     
