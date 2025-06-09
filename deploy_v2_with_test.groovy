@@ -22,7 +22,7 @@ pipeline {
                         echo "DB_USER=$DB_USER" >> .env
                         echo "DB_PASSWORD=$DB_PASSWORD" >> .env
                         echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
-                        echo "DB_HOST=non_existent_db" >> .env
+                        echo "DB_HOST=invalid_host" >> .env
                     '''
                 }
             }
@@ -33,15 +33,14 @@ pipeline {
                 script {
                     try {
                         sh '''
-                            docker stop diary-web || true
-                            docker rm diary-web || true
+                            docker compose stop web || true
+                            docker compose rm -f web || true
                             
                             docker compose up -d --no-deps web
                             
-                            sleep 10
-                            
-                            if [ "$(docker inspect -f '{{.State.Status}}' diary-web 2>/dev/null)" == "running" ]; then
-                                echo "Container should have failed but is running!"
+                            sleep 15
+                            if docker ps | grep -q diary-web; then
+                                echo "Container should have failed!"
                                 exit 1
                             fi
                         '''
@@ -63,9 +62,14 @@ pipeline {
                 script {
                     slackSend(channel: '#reports', message: 'Starting guaranteed rollback to v1...')
                     
-                    dir('rollback') {
+                    sh '''
+                        docker compose stop web || true
+                        docker compose rm -f web || true
+                    '''
+                    
+                    dir('rollback_v1') {
                         deleteDir()
-                        git branch: 'main', url: 'https://github.com/daschinskiy/diary.git'
+                        git branch: 'main', url: 'https://github.com/daschinskiy/diary.git', poll: false
                         
                         withCredentials([
                             usernamePassword(credentialsId: 'MYSQL_CREDS', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD'),
@@ -78,30 +82,19 @@ pipeline {
                                 echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
                                 echo "DB_HOST=db" >> .env
                                 
-                                docker stop diary-web || true
-                                docker rm diary-web || true
+                                docker compose up -d --force-recreate web
                                 
-                                docker compose up -d --no-deps web
-                                
-                                sleep 5
-                                echo "--- Container status ---"
+                                sleep 10
+                                echo "--- Current containers ---"
                                 docker ps -a
-                                echo "--- Web container details ---"
-                                docker inspect diary-web
+                                echo "--- Web container logs ---"
+                                docker logs diary-web || true
                             '''
                         }
                     }
                     
-                    def webStatus = sh(
-                        script: 'docker inspect -f "{{.State.Status}}" diary-web', 
-                        returnStdout: true
-                    ).trim()
-                    
-                    slackSend(
-                        channel: '#reports', 
-                        message: "Rollback complete! Status: $webStatus | " +
-                                "View: http://your-server-ip:5001"
-                    )
+                    def status = sh(script: 'docker inspect -f "{{.State.Status}}" diary-web', returnStdout: true).trim()
+                    slackSend(channel: '#reports', message: "Rollback complete! Status: $status")
                 }
             }
         }
