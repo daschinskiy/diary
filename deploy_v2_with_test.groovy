@@ -46,20 +46,19 @@ pipeline {
                 script {
                     try {
                         sh '''
-                            docker stop diary-web-test || true
-                            docker rm diary-web-test || true
+                            echo "Building new version..."
                             docker compose build web
-                            
-                            echo "Running simulated tests..."
                             
                             if [ "$FORCE_FAILURE" = "true" ]; then
                                 echo "SIMULATING TEST FAILURE!"
                                 exit 1
                             fi
+                            
+                            echo "Tests passed successfully"
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
-                        error("Simulated tests failed as expected: ${e.getMessage()}")
+                        error("Tests failed: ${e.getMessage()}")
                     }
                 }
             }
@@ -71,8 +70,7 @@ pipeline {
             }
             steps {
                 sh '''
-                    docker stop diary-web || true
-                    docker rm diary-web || true
+                    echo "Deploying new version..."
                     docker compose up -d --no-deps web
                 '''
             }
@@ -82,21 +80,35 @@ pipeline {
     post {
         failure {
             script {
-                slackSend(channel: '#reports', message: "🚨 Deployment failed! Performing rollback to v1. Build: ${BUILD_URL}")
+                slackSend(channel: '#reports', message: "🚨 Deployment failed! Performing rollback...")
                 
                 sh '''
+                    echo "Starting rollback to v1..."
                     git checkout main
+                    
                     docker stop diary-web || true
                     docker rm diary-web || true
+                    
                     docker compose build web
-                    docker compose up -d web
+                    if docker compose up -d web; then
+                        echo "Rollback completed successfully"
+                    else
+                        echo "Failed to complete rollback!"
+                        exit 1
+                    fi
                 '''
                 
-                slackSend(channel: '#reports', message: "✅ Rollback to v1 completed successfully")
+                // Проверяем, что контейнер запущен
+                def isRunning = sh(script: 'docker inspect -f "{{.State.Running}}" diary-web', returnStatus: true) == 0
+                if (isRunning) {
+                    slackSend(channel: '#reports', message: "✅ Successfully rolled back to v1! Container is running.")
+                } else {
+                    slackSend(channel: '#reports', message: "❌ Rollback failed! Container is not running.")
+                }
             }
         }
         success {
-            slackSend(channel: '#reports', message: "✅ Version 2 deployed successfully! Build: ${BUILD_URL}")
+            slackSend(channel: '#reports', message: "✅ Version 2 deployed successfully!")
         }
     }
 }
