@@ -22,6 +22,7 @@ pipeline {
                         echo "DB_USER=$DB_USER" >> .env
                         echo "DB_PASSWORD=$DB_PASSWORD" >> .env
                         echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
+                        echo "DB_HOST=diary-db" >> .env
                     '''
                 }
             }
@@ -34,9 +35,7 @@ pipeline {
                         docker stop diary-web || true
                         docker rm diary-web || true
                         docker compose build web
-                        # Здесь можно прописать реальные тесты
                         echo "Run tests here"
-                        # Искусственная ошибка:
                         exit 1
                     '''
                 }

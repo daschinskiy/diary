@@ -11,4 +11,10 @@ services:
     env_file:
       - .env
     restart: always
+    networks:
+      - diary_net
+
+networks:
+  diary_net:
+    external: true
 
