@@ -9,7 +9,6 @@ pipeline {
                 git branch: 'v2', url: 'https://github.com/daschinskiy/diary.git'
             }
         }
-
         stage('Create .env') {
             steps {
                 withCredentials([
@@ -25,24 +24,20 @@ pipeline {
                 }
             }
         }
-
         stage('Build and Deploy') {
             steps {
                 sh '''
-                    docker rm -f diary-web || true
-                    docker rm -f registry || true
-                    docker rm -f diary-db || true
-
                     docker compose pull || true
-                    docker compose build --no-cache
-                    docker compose up -d --remove-orphans
+                    docker compose build web
+                    docker compose stop web registry
+                    docker compose rm -f web registry
+                    docker compose up -d web registry
                 '''
             }
         }
-
         stage('Notify') {
             steps {
-                slackSend(channel: '#reports', message: 'Version 2 deployed successfully!')
+                slackSend(channel: '#reports', message: '✅ Version 2 deployed successfully!')
             }
         }
     }

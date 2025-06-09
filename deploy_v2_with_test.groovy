@@ -6,11 +6,10 @@ pipeline {
     stages {
         stage('Prepare') {
             steps {
-                slackSend(channel: '#reports', message: 'Deploying version 2...')
+                slackSend(channel: '#reports', message: '🚀 Deploying version 2...')
                 sh 'git checkout v2'
             }
         }
-
         stage('Create .env') {
             steps {
                 withCredentials([
@@ -26,29 +25,38 @@ pipeline {
                 }
             }
         }
-
-        stage('Build') {
+        stage('Test build') {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    sh 'exit 1'  // Симулируем ошибку сборки
+                    sh 'exit 1'  // Заменить на настоящие тесты позже
                 }
             }
         }
-
+        stage('Deploy') {
+            when { expression { currentBuild.currentResult == 'SUCCESS' } }
+            steps {
+                sh '''
+                    docker compose pull || true
+                    docker compose build web
+                    docker compose stop web registry
+                    docker compose rm -f web registry
+                    docker compose up -d web registry
+                '''
+                slackSend(channel: '#reports', message: '✅ Version 2 deployed successfully!')
+            }
+        }
         stage('Rollback') {
             when { failed() }
             steps {
-                slackSend(channel: '#reports', message: 'Error detected. Rolling back...')
+                slackSend(channel: '#reports', message: '❌ Build failed. Rolling back to main...')
                 sh '''
-                    docker rm -f diary-web || true
-                    docker rm -f registry || true
-                    docker rm -f diary-db || true
-
+                    docker compose stop web registry
+                    docker compose rm -f web registry
                     git checkout main
-                    docker compose build
-                    docker compose up -d --remove-orphans
+                    docker compose build web
+                    docker compose up -d web registry
                 '''
-                slackSend(channel: '#reports', message: 'Rollback complete.')
+                slackSend(channel: '#reports', message: '🔁 Rollback to main complete.')
             }
         }
     }
