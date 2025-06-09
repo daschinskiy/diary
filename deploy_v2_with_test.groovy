@@ -3,12 +3,14 @@ pipeline {
     environment {
         DB_NAME = 'diary'
         FORCE_FAILURE = 'true'
+        MAIN_BRANCH = 'main'
+        V2_BRANCH = 'v2'
     }
     stages {
         stage('Prepare') {
             steps {
-                slackSend(channel: '#reports', message: 'Starting deployment with forced failure test...')
-                git branch: 'v2', url: 'https://github.com/daschinskiy/diary.git'
+                slackSend(channel: '#reports', message: 'Starting deployment with rollback test...')
+                git branch: V2_BRANCH, url: 'https://github.com/daschinskiy/diary.git'
             }
         }
 
@@ -46,8 +48,8 @@ pipeline {
                 script {
                     try {
                         sh '''
-                            echo "Building new version..."
-                            docker compose build web
+                            echo "Building version 2..."
+                            docker compose -f docker-compose.v2.yml build web
                             
                             if [ "$FORCE_FAILURE" = "true" ]; then
                                 echo "SIMULATING TEST FAILURE!"
@@ -70,8 +72,8 @@ pipeline {
             }
             steps {
                 sh '''
-                    echo "Deploying new version..."
-                    docker compose up -d --no-deps web
+                    echo "Deploying version 2..."
+                    docker compose -f docker-compose.v2.yml up -d --no-deps web
                 '''
             }
         }
@@ -80,30 +82,46 @@ pipeline {
     post {
         failure {
             script {
-                slackSend(channel: '#reports', message: "🚨 Deployment failed! Performing rollback...")
+                slackSend(channel: '#reports', message: "🚨 Deployment failed! Performing rollback to v1...")
                 
-                sh '''
-                    echo "Starting rollback to v1..."
-                    git checkout main
+                dir('rollback') {
+                    deleteDir()
+                    git branch: MAIN_BRANCH, url: 'https://github.com/daschinskiy/diary.git'
                     
-                    docker stop diary-web || true
-                    docker rm diary-web || true
+                    withCredentials([
+                        usernamePassword(credentialsId: 'MYSQL_CREDS', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD'),
+                        string(credentialsId: 'MYSQL_ROOT_PASS', variable: 'DB_ROOT_PASSWORD')
+                    ]) {
+                        sh '''
+                            echo "DB_NAME=$DB_NAME" > .env
+                            echo "DB_USER=$DB_USER" >> .env
+                            echo "DB_PASSWORD=$DB_PASSWORD" >> .env
+                            echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
+                            echo "DB_HOST=db" >> .env
+                        '''
+                    }
                     
-                    docker compose build web
-                    if docker compose up -d web; then
-                        echo "Rollback completed successfully"
-                    else
-                        echo "Failed to complete rollback!"
-                        exit 1
-                    fi
-                '''
+                    sh '''
+                        echo "Stopping current containers..."
+                        docker stop diary-web diary-db registry || true
+                        docker rm diary-web diary-db registry || true
+                        
+                        echo "Deploying version 1..."
+                        docker compose up -d
+                        
+                        echo "Checking containers..."
+                        sleep 5
+                        docker ps
+                    '''
+                }
                 
-                // Проверяем, что контейнер запущен
-                def isRunning = sh(script: 'docker inspect -f "{{.State.Running}}" diary-web', returnStatus: true) == 0
-                if (isRunning) {
-                    slackSend(channel: '#reports', message: "✅ Successfully rolled back to v1! Container is running.")
+                def webRunning = sh(script: 'docker inspect -f "{{.State.Running}}" diary-web', returnStdout: true).trim() == 'true'
+                def dbRunning = sh(script: 'docker inspect -f "{{.State.Running}}" diary-db', returnStdout: true).trim() == 'true'
+                
+                if (webRunning && dbRunning) {
+                    slackSend(channel: '#reports', message: "✅ Successfully rolled back to v1! All containers are running.")
                 } else {
-                    slackSend(channel: '#reports', message: "❌ Rollback failed! Container is not running.")
+                    slackSend(channel: '#reports', message: "❌ Critical: Rollback failed! Containers status - Web: $webRunning, DB: $dbRunning")
                 }
             }
         }
