@@ -12,9 +12,9 @@ services:
       - .env
     restart: always
     networks:
-      - default
+      - diary_network
 
 networks:
-  default:
-    external: false
+  diary_network:
+    external: true
 
