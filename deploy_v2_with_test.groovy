@@ -22,7 +22,7 @@ pipeline {
                         echo "DB_USER=$DB_USER" >> .env
                         echo "DB_PASSWORD=$DB_PASSWORD" >> .env
                         echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
-                        echo "DB_HOST=non_existent_db" >> .env
+                        echo "DB_HOST=non_existent_db" >> .env  # Неправильный хост!
                     '''
                 }
             }
@@ -33,14 +33,13 @@ pipeline {
                 script {
                     try {
                         sh '''
-                            docker stop diary-web || true
-                            docker rm diary-web || true
-                            docker compose build web
-                            docker compose up -d web
+                            docker compose down || true
                             
-                            sleep 10
+                            docker compose up -d --build
                             
-                            if [ "$(docker inspect -f '{{.State.Status}}' diary-web)" != "running" ]; then
+                            sleep 15
+                            
+                            if [ "$(docker inspect -f '{{.State.Status}}' diary-web 2>/dev/null)" != "running" ]; then
                                 echo "Container failed to start as expected"
                                 exit 1
                             fi
@@ -59,11 +58,17 @@ pipeline {
             }
             steps {
                 script {
-                    slackSend(channel: '#reports', message: 'Starting rollback to v1...')
+                    slackSend(channel: '#reports', message: 'Starting guaranteed rollback to v1...')
                     
                     dir('rollback') {
                         deleteDir()
                         git branch: 'main', url: 'https://github.com/daschinskiy/diary.git'
+                        
+                        sh '''
+                            docker compose -f ../docker-compose.yml down || true
+                            docker stop diary-web diary-db registry || true
+                            docker rm diary-web diary-db registry || true
+                        '''
                         
                         withCredentials([
                             usernamePassword(credentialsId: 'MYSQL_CREDS', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD'),
@@ -76,22 +81,27 @@ pipeline {
                                 echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
                                 echo "DB_HOST=db" >> .env
                                 
-                                docker compose down || true
-                                docker compose up -d
+                                docker compose up -d --force-recreate
                                 
-                                sleep 5
+                                sleep 10
+                                echo "Container status:"
                                 docker ps -a | grep diary-web
-                                docker inspect -f '{{.State.Status}}' diary-web
+                                echo "Ports:"
+                                docker inspect -f '{{range \$p, \$conf := .NetworkSettings.Ports}}{{\$p}} {{end}}' diary-web
                             '''
                         }
                     }
                     
-                    def webStatus = sh(script: 'docker inspect -f "{{.State.Status}}" diary-web', returnStdout: true).trim()
-                    def webPorts = sh(script: 'docker inspect -f "{{range \$p, \$conf := .NetworkSettings.Ports}}{{\$p}} {{end}}" diary-web', returnStdout: true).trim()
+                    def webStatus = sh(
+                        script: 'docker inspect -f "{{.State.Status}}" diary-web', 
+                        returnStdout: true
+                    ).trim()
                     
-                    slackSend(channel: '#reports', 
-                        message: "Rollback complete! Status: $webStatus, Ports: $webPorts | " +
-                                "View: http://your-server-ip:5001")
+                    slackSend(
+                        channel: '#reports', 
+                        message: "Rollback result - Status: $webStatus | " +
+                                "View: http://your-server-ip:5001"
+                    )
                 }
             }
         }
