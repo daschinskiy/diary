@@ -11,10 +11,33 @@ services:
     env_file:
       - .env
     restart: always
+    depends_on:
+      - db
+    networks:
+      - diary_network
+
+  db:
+    image: mysql:5.7
+    container_name: diary-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - diary_db_data:/var/lib/mysql
+    restart: always
     networks:
       - diary_network
 
 networks:
   diary_network:
     external: true
+    name: diary_default
 
+volumes:
+  diary_db_data:
+    external: true
+    name: diary_db_data
